@@ -3,7 +3,7 @@ import tkinter
 import tkinter.messagebox
 from tkintermapview import TkinterMapView
 from pyswip import Prolog
-
+import pandas as pd
 
 class App(tkinter.Tk):
 
@@ -126,6 +126,9 @@ class App(tkinter.Tk):
         self.mainloop()
 
 # TODO 1: read destinations' descriptions from Destinations.csv and add them to the prolog knowledge base
+        
+dest_df = pd.read_csv('./Destinations')
+
 ################################################################################################
 # STEP1: Define the knowledge base of illnesses and their symptoms
 
