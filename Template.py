@@ -4,6 +4,10 @@ import tkinter.messagebox
 from tkintermapview import TkinterMapView
 from pyswip import Prolog
 import pandas as pd
+from itertools import chain
+
+
+uniqe_features_dict = {}
 
 class App(tkinter.Tk):
 
@@ -119,7 +123,15 @@ class App(tkinter.Tk):
         # Placeholder: Assuming each line in the text contains a single location name
         # TODO 3: extract key features from user's description of destinations
         ################################################################################################
-
+        entered_features = {}
+        words = set(chain.from_iterable(line.strip().lower().split(' ') for line in text.split('\n') if line.strip()))
+        for feature_key in uniqe_features_dict:
+            intersection = words.intersection(uniqe_features_dict[feature_key])
+            if intersection:
+                entered_features[feature_key] = intersection
+            else:
+                entered_features[feature_key] = '-'
+        
         return [line.strip() for line in text.split('\n') if line.strip()]
 
     def start(self):
@@ -127,25 +139,24 @@ class App(tkinter.Tk):
 
 # TODO 1: read destinations' descriptions from Destinations.csv and add them to the prolog knowledge base
         
-dest_df = pd.read_csv('./Destinations')
+dest_df = pd.read_csv('./Destinations.csv')
+prolog = Prolog()
+prolog.retractall("destination(_, _, _, _, _, _, _, _, _, _, _, _, _)")
+
+for _,row in dest_df.iterrows():
+    prolog.assertz(f"destination('{str(row['Destinations']).lower()}', '{str(row['country']).lower()}', '{str(row['region']).lower()}', '{str(row['Climate']).lower()}', '{str(row['Budget']).lower()}', '{str(row['Activity']).lower()}', '{str(row['Demographics']).lower()}', '{str(row['Duration']).lower()}', '{str(row['Cuisine']).lower()}', '{str(row['History']).lower()}', '{str(row['Natural Wonder']).lower()}', '{str(row['Accommodation']).lower()}', '{str(row['Language']).lower()}')")
+
 
 ################################################################################################
-# STEP1: Define the knowledge base of illnesses and their symptoms
-
-prolog = Prolog()
-
-prolog.retractall("destination(_, _, _, _, _, _, _, _, _, _, _, _, _)")
-prolog.assertz("destination('Tokyo', japan, 'East Asia', temperate, high, cultural, solo, long, asian, modern, mountains, luxury, japanese)")
-prolog.assertz("destination('Ottawa', canada, 'North America', cold, medium, adventure, family_friendly, medium, european, modern, forests, mid_range, english)")
-prolog.assertz("destination('Mexico City', mexico, 'North America', temperate, low, cultural, senior, short, latin_american, ancient, mountains, budget, spanish)")
-prolog.assertz("destination('Rome', italy, 'Southern Europe', temperate, high, cultural, solo, medium, european, ancient, beaches, luxury, italian)")
-prolog.assertz("destination('Brasilia', brazil, 'South America', tropical, low, adventure, family_friendly, long, latin_american, modern, beaches, budget, portuguese)")
-
-
 
 # TODO 2: extract unique features from the Destinations.csv and save them in a dictionary
+for column_name in dest_df.columns:
+    if column_name == 'Destinations':
+        continue
+    feature_set = set()
+    feature_set.update({feature.lower() for feature in dest_df[column_name]})
+    uniqe_features_dict[str(column_name).lower()] = feature_set
 ################################################################################################
-
 
 if __name__ == "__main__":
     app = App()
