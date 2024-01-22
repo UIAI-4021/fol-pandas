@@ -3,7 +3,11 @@ import tkinter
 import tkinter.messagebox
 from tkintermapview import TkinterMapView
 from pyswip import Prolog
+import pandas as pd
+from itertools import chain
+import numpy as np
 
+uniqe_features_dict = {}
 
 class App(tkinter.Tk):
 
@@ -63,32 +67,116 @@ class App(tkinter.Tk):
         self.marker_list = []  # Keeping track of markers
 
     def check_connections(self, results):
+        adjacency_df = pd.read_csv('Adjacency_matrix.csv')
+        adjacency_matrix_p2 = np.array(adjacency_df.iloc[:,1:])
+        adjacency_matrix_p2 = np.dot(adjacency_matrix_p2, adjacency_matrix_p2)
+        
+        adjacency_df_p2 = pd.DataFrame(adjacency_matrix_p2)
+        all_dest_lst = list(adjacency_df[:,0])
         print('result2 ', results)
+
         locations = []
+
+        for _,row in adjacency_df.iterrows():
+            for i in range(len(row)):
+                if row[i] == 1:
+                    prolog.assertz(f"directly_connected('{str(row[0]).lower()}',
+                                    \"{str(adjacency_df.columns[i]).lower()}\")")
+        
+        for _,row in adjacency_df_p2.iterrows(): // for level 3
+            for i in range(len(row)):
+                if row[i] == 1:
+                    prolog.assertz(f"directly_connected('{str(all_dest_lst[row[0]]).lower()}',
+                                    \"{str(all_dest_lst[adjacency_df.columns[i]]).lower()}\")")
+
+        prolog.assertz("connected(X, Y) :- directly_connected(X, Y)")
+        prolog.assertz("connected(X, Y) :- directly_connected(Y, X)")
+
+        prolog.assertz("connected(X, Y) :- directly_connected(X, Z), connected(Z, Y)")
+
+        def search(queary):
+            connected_cities = set()
+            connected = list(prolog.query(queary))
+            for dest in connected:
+                connected_city = dest['X']
+                if isinstance(connected_city, bytes):
+                    connected_city = connected_city.decode('utf-8')
+                print(connected_city)
+                connected_cities.add(connected_city)
+            return connected_cities
+        connected_dict = {}
+        
+        def are_connected(locations):
+            for location in locations:
+                for loc_for_cnnctd in locations:
+                    if location not in connected_dict[loc_for_cnnctd]:
+                        return False
+            return True
+        def find_max_sequence(locations):
+            max_sequence = []
+            max_length = 0
+
+            for i in range(len(locations)):
+                for j in range(i, len(locations)):
+                    current_sequence = locations[i:j + 1]
+                    if are_connected(current_sequence):
+                        if len(current_sequence) > max_length:
+                            max_length = len(current_sequence)
+                            max_sequence = current_sequence
+            return max_sequence
+
         for result in results:
             city  = result["City"]
             locations.append(city)
             # TODO 5: create the knowledgebase of the city and its connected destinations using Adjacency_matrix.csv
-
-
-        return locations
+            print(city)
+            query = f"connected('{city}', X)"
+            connected_dict[city] =  search(query)
+        return find_max_sequence(locations)
 
     def process_text(self):
         """Extract locations from the text area and mark them on the map."""
         text = self.text_area.get("1.0", "end-1c")  # Get text from text area
-        locations = self.extract_locations(text)  # Extract locations (you may use a more complex method here)
+        features_dict = self.extract_locations(text)
+        # locations = features_dict['']  # Extract locations (you may use a more complex method here)
+        query_dict = {}
+        
+        temp_keys = ['A', 'B', 'C' , 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
+        tmp_i = 0 
+
+        for feature_set in features_dict:
+            str = '('
+            for feature in features_dict[feature_set]:
+                if feature == '_':
+                    str += temp_keys[tmp_i] + ' = '  + feature + ' ; '
+                else:
+                    str += temp_keys[tmp_i] + ' = ' + "'" + feature + "'" + ' ; '
+            str = str[:-3]
+            str += ')'
+            query_dict[temp_keys[tmp_i]] = str
+            tmp_i += 1
+        query = f"destination(City,A, B, C, D, E, F, G, H, I, J, K, L), {query_dict['A']}, {query_dict['B']}, {query_dict['C']}, {query_dict['D']}, {query_dict['E']}, {query_dict['F']}, {query_dict['G']}, {query_dict['H']}, {query_dict['I']}, {query_dict['J']}, {query_dict['K']}, {query_dict['L']}"
 
 
         # TODO 4: create the query based on the extracted features of user desciption 
         ################################################################################################
-        query = "destination(City,_, _, _, low, _, _, _, _, _, _, _, _)"
+        # query = "destination(City,_, _, _, low, _, _, _, _, _, _, _, _)"
         results = list(prolog.query(query))
-        print(results)
+        locations = []
+        if len(results) > 5:
+            tkinter.messagebox.showinfo("error", "Information is not enough for specific destinations.")
+            
+            raise Exception('More Than 5 recommendations')
+        elif len(results) == 0:
+    
+            tkinter.messagebox.showinfo("error", "No Tour recommended")
+
+            raise Exception('No tour recommended')
         locations = self.check_connections(results)
         # TODO 6: if the number of destinations is less than 6 mark and connect them 
         ################################################################################################
-        print(locations)
-        locations = ['mexico_city','rome' ,'brasilia']
+        # print(locations)
+        # locations = ['mexico_city','rome' ,'brasilia']
         self.mark_locations(locations)
 
     def mark_locations(self, locations):
@@ -119,31 +207,52 @@ class App(tkinter.Tk):
         # Placeholder: Assuming each line in the text contains a single location name
         # TODO 3: extract key features from user's description of destinations
         ################################################################################################
-
-        return [line.strip() for line in text.split('\n') if line.strip()]
+        entered_features = {}
+        words = {str(item).replace('-', ' ') for item in set(chain.from_iterable(line.strip().lower().split(' ') for line in text.split('\n') if line.strip()))}
+        for feature_key in uniqe_features_dict:
+            intersection = words.intersection(uniqe_features_dict[feature_key])
+            if intersection:
+                entered_features[feature_key] = intersection
+            else:
+                entered_features[feature_key] = '_'
+        
+        return entered_features
 
     def start(self):
         self.mainloop()
 
 # TODO 1: read destinations' descriptions from Destinations.csv and add them to the prolog knowledge base
-################################################################################################
-# STEP1: Define the knowledge base of illnesses and their symptoms
-
+        
+dest_df = pd.read_csv('./Destinations.csv')
 prolog = Prolog()
-
 prolog.retractall("destination(_, _, _, _, _, _, _, _, _, _, _, _, _)")
-prolog.assertz("destination('Tokyo', japan, 'East Asia', temperate, high, cultural, solo, long, asian, modern, mountains, luxury, japanese)")
-prolog.assertz("destination('Ottawa', canada, 'North America', cold, medium, adventure, family_friendly, medium, european, modern, forests, mid_range, english)")
-prolog.assertz("destination('Mexico City', mexico, 'North America', temperate, low, cultural, senior, short, latin_american, ancient, mountains, budget, spanish)")
-prolog.assertz("destination('Rome', italy, 'Southern Europe', temperate, high, cultural, solo, medium, european, ancient, beaches, luxury, italian)")
-prolog.assertz("destination('Brasilia', brazil, 'South America', tropical, low, adventure, family_friendly, long, latin_american, modern, beaches, budget, portuguese)")
+
+for _,row in dest_df.iterrows():
+    prolog.assertz(f"destination('{str(row['Destinations']).lower()}', '{str(row['country']).lower()}', '{str(row['region']).lower()}', '{str(row['Climate']).lower()}', '{str(row['Budget']).lower()}', '{str(row['Activity']).lower()}', '{str(row['Demographics']).lower()}', '{str(row['Duration']).lower()}', '{str(row['Cuisine']).lower()}', '{str(row['History']).lower()}', '{str(row['Natural Wonder']).lower()}', '{str(row['Accommodation']).lower()}', '{str(row['Language']).lower()}')")
 
 
+
+
+
+################################################################################################
 
 # TODO 2: extract unique features from the Destinations.csv and save them in a dictionary
+for column_name in dest_df.columns:
+    if column_name == 'Destinations':
+        continue
+    feature_set = set()
+    feature_set.update({feature.lower() for feature in dest_df[column_name]})
+    uniqe_features_dict[str(column_name).lower()] = feature_set
 ################################################################################################
 
-
 if __name__ == "__main__":
-    app = App()
-    app.start()
+    try:
+        app = App()
+        app.start()
+    except Exception as e:
+        print(e)
+        app = App()
+        app.start()
+
+
+    
