@@ -5,7 +5,7 @@ from tkintermapview import TkinterMapView
 from pyswip import Prolog
 import pandas as pd
 from itertools import chain
-
+import numpy as np
 
 uniqe_features_dict = {}
 
@@ -68,14 +68,27 @@ class App(tkinter.Tk):
 
     def check_connections(self, results):
         adjacency_df = pd.read_csv('Adjacency_matrix.csv')
+        adjacency_matrix_p2 = np.array(adjacency_df.iloc[:,1:])
+        adjacency_matrix_p2 = np.dot(adjacency_matrix_p2, adjacency_matrix_p2)
+        
+        adjacency_df_p2 = pd.DataFrame(adjacency_matrix_p2)
+        all_dest_lst = list(adjacency_df[:,0])
         print('result2 ', results)
+
         locations = []
 
         for _,row in adjacency_df.iterrows():
             for i in range(len(row)):
                 if row[i] == 1:
-                    prolog.assertz(f"directly_connected('{str(row[0]).lower()}', \"{str(adjacency_df.columns[i]).lower()}\")")
+                    prolog.assertz(f"directly_connected('{str(row[0]).lower()}',
+                                    \"{str(adjacency_df.columns[i]).lower()}\")")
         
+        for _,row in adjacency_df_p2.iterrows(): // for level 3
+            for i in range(len(row)):
+                if row[i] == 1:
+                    prolog.assertz(f"directly_connected('{str(all_dest_lst[row[0]]).lower()}',
+                                    \"{str(all_dest_lst[adjacency_df.columns[i]]).lower()}\")")
+
         prolog.assertz("connected(X, Y) :- directly_connected(X, Y)")
         prolog.assertz("connected(X, Y) :- directly_connected(Y, X)")
 
@@ -93,6 +106,24 @@ class App(tkinter.Tk):
             return connected_cities
         connected_dict = {}
         
+        def are_connected(locations):
+            for location in locations:
+                for loc_for_cnnctd in locations:
+                    if location not in connected_dict[loc_for_cnnctd]:
+                        return False
+            return True
+        def find_max_sequence(locations):
+            max_sequence = []
+            max_length = 0
+
+            for i in range(len(locations)):
+                for j in range(i, len(locations)):
+                    current_sequence = locations[i:j + 1]
+                    if are_connected(current_sequence):
+                        if len(current_sequence) > max_length:
+                            max_length = len(current_sequence)
+                            max_sequence = current_sequence
+            return max_sequence
 
         for result in results:
             city  = result["City"]
@@ -101,8 +132,8 @@ class App(tkinter.Tk):
             print(city)
             query = f"connected('{city}', X)"
             connected_dict[city] =  search(query)
-    
-    
+        return find_max_sequence(locations)
+
     def process_text(self):
         """Extract locations from the text area and mark them on the map."""
         text = self.text_area.get("1.0", "end-1c")  # Get text from text area
@@ -132,11 +163,20 @@ class App(tkinter.Tk):
         # query = "destination(City,_, _, _, low, _, _, _, _, _, _, _, _)"
         results = list(prolog.query(query))
         locations = []
+        if len(results) > 5:
+            tkinter.messagebox.showinfo("error", "Information is not enough for specific destinations.")
+            
+            raise Exception('More Than 5 recommendations')
+        elif len(results) == 0:
+    
+            tkinter.messagebox.showinfo("error", "No Tour recommended")
+
+            raise Exception('No tour recommended')
         locations = self.check_connections(results)
         # TODO 6: if the number of destinations is less than 6 mark and connect them 
         ################################################################################################
-        print(locations)
-        locations = ['mexico_city','rome' ,'brasilia']
+        # print(locations)
+        # locations = ['mexico_city','rome' ,'brasilia']
         self.mark_locations(locations)
 
     def mark_locations(self, locations):
@@ -206,5 +246,13 @@ for column_name in dest_df.columns:
 ################################################################################################
 
 if __name__ == "__main__":
-    app = App()
-    app.start()
+    try:
+        app = App()
+        app.start()
+    except Exception as e:
+        print(e)
+        app = App()
+        app.start()
+
+
+    
