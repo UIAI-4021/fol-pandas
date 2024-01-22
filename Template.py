@@ -83,7 +83,7 @@ class App(tkinter.Tk):
                     prolog.assertz(f"directly_connected('{str(row[0]).lower()}',
                                     \"{str(adjacency_df.columns[i]).lower()}\")")
         
-        for _,row in adjacency_df_p2.iterrows(): // for level 3
+        for _,row in adjacency_df_p2.iterrows():
             for i in range(len(row)):
                 if row[i] == 1:
                     prolog.assertz(f"directly_connected('{str(all_dest_lst[row[0]]).lower()}',
