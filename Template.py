@@ -92,6 +92,8 @@ class App(tkinter.Tk):
                 connected_cities.add(connected_city)
             return connected_cities
         connected_dict = {}
+        
+
         for result in results:
             city  = result["City"]
             locations.append(city)
@@ -100,10 +102,7 @@ class App(tkinter.Tk):
             query = f"connected('{city}', X)"
             connected_dict[city] =  search(query)
     
-
-        
-        return locations
-
+    
     def process_text(self):
         """Extract locations from the text area and mark them on the map."""
         text = self.text_area.get("1.0", "end-1c")  # Get text from text area
